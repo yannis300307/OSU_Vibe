@@ -11,5 +11,9 @@ For more info, see [the Geode docs](https://docs.geode-sdk.org/getting-started/c
 geode build
 ```
 
-# credits
+## Credits
 The mod includes code from [LevelInfoMusic](https://github.com/DumbCaveSpider/LevelInfoMusic) [GPL-3.0 License]
+
+## Transparency about AI
+Because I said that I don't like using AI to write code, I have to explain the usage of AI in the project.
+I used Gemini to quickly write some code for the music analysis (FMODE). The rest of the code is made by hand (music_manager.c is not made by me). But currently, the music analysis code is just a draft and I'm planning to rewrite everything by hand in a much cleaner way. When the code will be rewritten, I will remove this note.
