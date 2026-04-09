@@ -1,0 +1,17 @@
+{
+	"geode": "5.5.3",
+	"gd": {
+		"win": "2.2081",
+		"android": "2.2081",
+		"mac": "2.2081",
+		"ios": "2.2081"
+	},
+	"id": "yannis300307.osuvibe",
+	"name": "OSUVibe",
+	"version": "v0.1.0",
+	"developer": "Yannis300307",
+	"description": "You like Geometry Dash but you think that the menus are better in OSU!? Let's bring the OSU!'s menus to GD!",
+	"dependencies": {
+		"geode.node-ids": ">=v1.20.0"
+	}
+}
