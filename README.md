@@ -1,4 +1,4 @@
-# OSUVibe
+# OSU!Vibe
 
 Bring the vibe of OSU!'s menus to Geometry Dash!
 
