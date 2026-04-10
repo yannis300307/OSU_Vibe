@@ -24,14 +24,14 @@ float getCurrentMusicVolume() {
     if (!channel) return 0.0f;
 
     FMOD::DSP* dsp;
-    if (channel->getDSP(FMOD_CHANNELCONTROL_DSP_HEAD, &dsp) != FMOD_OK) {
+    if (channel->getDSP(FMOD_CHANNELCONTROL_DSP_TAIL, &dsp) != FMOD_OK) {
         return 0.0f;
     }
 
-    dsp->setMeteringEnabled(false, true); // (input, output)
+    dsp->setMeteringEnabled(true, false);
 
     FMOD_DSP_METERING_INFO info;
-    if (dsp->getMeteringInfo(nullptr, &info) != FMOD_OK) {
+    if (dsp->getMeteringInfo(&info, nullptr) != FMOD_OK) {
         return 0.0f;
     }
 
@@ -42,11 +42,6 @@ float getCurrentMusicVolume() {
         }
         rms = std::sqrt(rms / info.numchannels);
     }
-	float volume;
-
-	channel->getVolume(&volume);
-
-	rms /= volume;
 
     return rms;
 }
@@ -96,7 +91,7 @@ class $modify(MyMenuLayer, MenuLayer) {
         if (channel && system) {
             system->createDSPByType(FMOD_DSP_TYPE_FFT, &m_fields->m_fftDSP);
             m_fields->m_fftDSP->setParameterInt(FMOD_DSP_FFT_WINDOWSIZE, 20);
-            channel->addDSP(FMOD_CHANNELCONTROL_DSP_HEAD, m_fields->m_fftDSP);
+            channel->addDSP(FMOD_CHANNELCONTROL_DSP_TAIL, m_fields->m_fftDSP);
         }
 
 		this->schedule(schedule_selector(MyMenuLayer::function_not_already_used));
@@ -112,6 +107,8 @@ class $modify(MyMenuLayer, MenuLayer) {
 		auto sprite = play_button->getChildByIndex(0);
 
 		auto beats_menu = main_menu->getChildByID("beats-menu");
+
+		//geode::log::debug("dt: {}", dt);
 
 		sprite->setScale(1.0 + level * 0.5);
 
@@ -138,7 +135,7 @@ class $modify(MyMenuLayer, MenuLayer) {
 			if (this->m_fields->beats_amplitude[i % 20] < 0.0)
 				this->m_fields->beats_amplitude[i % 20] = 0.0; 
 			auto beat = beats_menu->getChildByIndex(i);
-			beat->setScaleX(2.0f + log10f(1.0f + amplitude * 200.0f) * 6.0f);
+			beat->setScaleX(2.0f + log10f(1.0f + amplitude * 60.0f) * 6.0f);
 			beat->updateLayout();
 		}
 
