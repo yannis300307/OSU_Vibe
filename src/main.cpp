@@ -1,6 +1,8 @@
 #include "Geode/cocos/base_nodes/CCNode.h"
+#include "Geode/cocos/cocoa/CCGeometry.h"
 #include "Geode/cocos/layers_scenes_transitions_nodes/CCLayer.h"
 #include "Geode/cocos/menu_nodes/CCMenu.h"
+#include "Geode/cocos/platform/win32/CCGL.h"
 #include "Geode/cocos/sprite_nodes/CCSprite.h"
 #include "Geode/loader/Log.hpp"
 #include "fmod.hpp"
@@ -46,10 +48,22 @@ float getCurrentMusicVolume() {
     return rms;
 }
 
+const unsigned int BEATS_AVERGAGE = 2;
+const float BEAT_WIDTH = 0.12f;
+const unsigned int SAMPLES_COUNT = 36;
+const float BEATS_CIRLCE_RADIUS = 57.0f;
+const float BASE_PLAY_BUTTON_SCALE = 0.12f;
+const float BEATS_LENGHT = 2.0f;
+const float BEATS_DECAY_FACTOR = 1.0f;
+const float OFFSET_ROTATION_SPEED = 50.0f;
+
+const unsigned int BEATS_AMOUNT = 360 / BEATS_AVERGAGE;
+
 class $modify(MyMenuLayer, MenuLayer) {
 	struct Fields {
         FMOD::DSP* m_fftDSP = nullptr;
-		float beats_amplitude[90];
+		float beats_amplitude[BEATS_AMOUNT];
+		float beats_offset = 0.;
     };
 
 	bool init() {
@@ -58,23 +72,37 @@ class $modify(MyMenuLayer, MenuLayer) {
 		}
 		
 		auto main_menu = this->getChildByID("main-menu");
+
+		auto play_button = main_menu->getChildByID("play-button");
+		auto sprite = play_button->getChildByIndex(0);
+
+		play_button->removeAllChildren();
+
+		auto new_sprite = CCSprite::create("play_button.png"_spr);
+		new_sprite->setScale(BASE_PLAY_BUTTON_SCALE);
+		new_sprite->setPosition({play_button->getContentWidth() / 2.0f, play_button->getContentHeight() / 2.0f});
+		play_button->setZOrder(10);
+		play_button->addChild(new_sprite);
+
+
 		auto beats_menu = CCNode::create();
 		beats_menu->setPosition({main_menu->getContentWidth() / 2.0f, main_menu->getContentHeight() / 2.0f});
 		beats_menu->setID("beats-menu");
 		beats_menu->setAnchorPoint({0.5f, 0.5f});
 		beats_menu->setZOrder(-1);
 		
-		for (int i = 0; i < 360; i += 4)
+		for (int i = 0; i < 360; i += BEATS_AVERGAGE)
 		{
 			float angle = i * std::numbers::pi / 180.f;
 
-			auto sprite = CCSprite::createWithSpriteFrameName("block007_bgcolor_012_001.png");
+			auto sprite = CCSprite::create("beat.png"_spr);
 			
-			sprite->setPositionX(30.0f * cosf(angle));
-			sprite->setPositionY(30.0f * sinf(angle));
-			sprite->setScaleY(0.3f);
+			sprite->setPositionX(BEATS_CIRLCE_RADIUS * cosf(angle));
+			sprite->setPositionY(BEATS_CIRLCE_RADIUS * sinf(angle));
+			sprite->setScaleY(BEAT_WIDTH);
 			sprite->setAnchorPoint({0.0f, 0.5f});
 			sprite->setRotation(-static_cast<float>(i));
+			sprite->setOpacity(200);
 			beats_menu->addChild(sprite);
 		}
 
@@ -82,7 +110,7 @@ class $modify(MyMenuLayer, MenuLayer) {
 
 		this->updateLayout();
 
-		std::fill(this->m_fields->beats_amplitude, this->m_fields->beats_amplitude + 90, 0.0f);
+		std::fill(this->m_fields->beats_amplitude, this->m_fields->beats_amplitude + BEATS_AMOUNT, 0.0f);
 
 		auto engine = FMODAudioEngine::sharedEngine();
         auto system = engine->m_system; // The core FMOD system
@@ -90,7 +118,7 @@ class $modify(MyMenuLayer, MenuLayer) {
 
         if (channel && system) {
             system->createDSPByType(FMOD_DSP_TYPE_FFT, &m_fields->m_fftDSP);
-            m_fields->m_fftDSP->setParameterInt(FMOD_DSP_FFT_WINDOWSIZE, 20);
+            m_fields->m_fftDSP->setParameterInt(FMOD_DSP_FFT_WINDOWSIZE, SAMPLES_COUNT);
             channel->addDSP(FMOD_CHANNELCONTROL_DSP_TAIL, m_fields->m_fftDSP);
         }
 
@@ -110,7 +138,13 @@ class $modify(MyMenuLayer, MenuLayer) {
 
 		//geode::log::debug("dt: {}", dt);
 
-		sprite->setScale(1.0 + level * 0.5);
+		this->m_fields->beats_offset += dt * OFFSET_ROTATION_SPEED;
+		if (this->m_fields->beats_offset > SAMPLES_COUNT)
+		{
+			this->m_fields->beats_offset = 0.0f;
+		}
+
+		sprite->setScale(BASE_PLAY_BUTTON_SCALE + level * 0.01f);
 
 		if (!m_fields->m_fftDSP) return;
 
@@ -120,25 +154,28 @@ class $modify(MyMenuLayer, MenuLayer) {
 		auto res = m_fields->m_fftDSP->getParameterData(FMOD_DSP_FFT_SPECTRUMDATA, (void**)&fftData, &length, nullptr, 0);
 		
 		if (res == FMOD_OK && fftData->spectrum[0]) {			
-			for (int i = 0; i < 20; i++) {
-				float amplitude = fftData->spectrum[0][i];
+			for (int i = 0; i < SAMPLES_COUNT; i++) {
+				unsigned int ampl_index = (i - static_cast<int>(this->m_fields->beats_offset)) % SAMPLES_COUNT;
+				float amplitude = fftData->spectrum[0][ampl_index];
+				amplitude = powf(amplitude, 1.0f/3.0f);
 				float old_amplitude = this->m_fields->beats_amplitude[i];
 				if (amplitude > old_amplitude)
 					this->m_fields->beats_amplitude[i] = amplitude;	
 			}
 		}
 
-		for (int i = 0; i < 90; i++)
+		for (int i = 0; i < BEATS_AMOUNT; i++)
 		{
-			float amplitude = this->m_fields->beats_amplitude[i % 20];
-			this->m_fields->beats_amplitude[i % 20] -= dt * 0.03f;
-			if (this->m_fields->beats_amplitude[i % 20] < 0.0)
-				this->m_fields->beats_amplitude[i % 20] = 0.0; 
+			unsigned int ampl_index = i % SAMPLES_COUNT;
+			float amplitude = this->m_fields->beats_amplitude[ampl_index];
+			this->m_fields->beats_amplitude[ampl_index] -= dt * BEATS_DECAY_FACTOR * ((1.0f - amplitude) * 0.8f + 0.2f);
+			if (this->m_fields->beats_amplitude[ampl_index] < 0.0)
+				this->m_fields->beats_amplitude[ampl_index] = 0.0; 
 			auto beat = beats_menu->getChildByIndex(i);
-			beat->setScaleX(2.0f + log10f(1.0f + amplitude * 60.0f) * 6.0f);
+			beat->setScaleX(amplitude * BEATS_LENGHT);
 			beat->updateLayout();
 		}
 
-		sprite->updateLayout();
+		this->updateLayout();
     }
 };

@@ -10,8 +10,14 @@
 	"name": "OSUVibe",
 	"version": "v0.1.0",
 	"developer": "Yannis300307",
-	"description": "You like Geometry Dash but you think that the menus are better in OSU!? Let's bring the OSU!'s menus to GD!",
+	"description": "Let's bring OSU!'s vibe to GD!",
 	"dependencies": {
 		"geode.node-ids": ">=v1.20.0"
-	}
+	},
+	"resources": {
+        "sprites": [
+            "resources/play_button.png",
+			"resources/beat.png"
+        ]
+    }
 }

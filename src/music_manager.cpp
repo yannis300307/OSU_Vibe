@@ -34,6 +34,7 @@ void storeMenuBGPosition() {
 }
 
 void restoreMenuBGPosition() {
+  return;
   FMOD::Channel *channel = nullptr;
   auto fmod = FMODAudioEngine::sharedEngine();
   auto resultBG = fmod->m_backgroundMusicChannel->getChannel(0, &channel);
