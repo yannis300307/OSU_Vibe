@@ -5,11 +5,14 @@
 #include "fmod.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/binding/CCMenuItemSpriteExtra.hpp>
+#include <Geode/binding/GameLevelManager.hpp>
+#include <Geode/binding/MusicDownloadManager.hpp>
 #include <Geode/cocos/draw_nodes/CCDrawingPrimitives.h>
 #include <algorithm>
 #include <cmath>
 #include <numbers>
 #include <Geode/modify/MenuLayer.hpp>
+#include <vector>
 
 
 using namespace geode::prelude;
@@ -98,6 +101,19 @@ class $modify(MyMenuLayer, MenuLayer) {
 		if (channel->getDSP(FMOD_CHANNELCONTROL_DSP_TAIL, &m_fields->m_fftDSP) == FMOD_OK) {
 			m_fields->m_fftDSP->setMeteringEnabled(true, false);
 		}
+
+		auto music_manager = MusicDownloadManager::sharedState();
+		std::vector<int> songs;
+		for (auto* song : CCArrayExt<SongInfoObject*>(music_manager->getDownloadedSongs()))
+		{
+			if (song->m_songID < 10000000)
+				songs.push_back(song->m_songID);
+		}
+
+		engine->stopAllMusic(true);
+		auto song_path = music_manager->pathForSong(songs[random::nextU64() % songs.size()]);
+		engine->playMusic(song_path, false, 0.0f, 0);
+
 
 
 		this->schedule(schedule_selector(MyMenuLayer::function_not_already_used));
