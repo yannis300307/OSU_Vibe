@@ -13,6 +13,7 @@ geode build
 
 ## Credits
 The mod includes code from [LevelInfoMusic](https://github.com/DumbCaveSpider/LevelInfoMusic) [GPL-3.0 License]
+Play button made with the help of [SeigneurLeFou](https://github.com/SeigneurLefou).
 
 ## Transparency about AI
 Because I said that I don't like using AI to write code, I have to explain the usage of AI in the project.
