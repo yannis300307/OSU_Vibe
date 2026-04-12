@@ -1,19 +1,29 @@
+#include "Geode/c++stl/string.hpp"
+#include "Geode/cocos/CCDirector.h"
 #include "Geode/cocos/base_nodes/CCNode.h"
 #include "Geode/cocos/cocoa/CCGeometry.h"
+#include "Geode/cocos/layers_scenes_transitions_nodes/CCTransition.h"
 #include "Geode/cocos/sprite_nodes/CCSprite.h"
 #include "Geode/loader/Log.hpp"
+#include "Geode/utils/addresser.hpp"
 #include "fmod.hpp"
 #include <Geode/Geode.hpp>
+#include <Geode/binding/AppDelegate.hpp>
 #include <Geode/binding/CCMenuItemSpriteExtra.hpp>
 #include <Geode/binding/GameLevelManager.hpp>
+#include <Geode/binding/MenuLayer.hpp>
 #include <Geode/binding/MusicDownloadManager.hpp>
+#include <Geode/binding/PauseLayer.hpp>
 #include <Geode/cocos/draw_nodes/CCDrawingPrimitives.h>
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <numbers>
 #include <Geode/modify/MenuLayer.hpp>
 #include <vector>
-
+#include <Geode/modify/AppDelegate.hpp>
+#include <Geode/modify/FMODAudioEngine.hpp>
+#include <Geode/modify/CreatorLayer.hpp>
 
 using namespace geode::prelude;
 
@@ -29,6 +39,113 @@ const float OFFSET_ROTATION_SPEED = 50.0f;
 
 const unsigned int BEATS_AMOUNT = 360 / BEATS_AVERGAGE;
 
+float old_background_music_volume = 0.0f;
+
+bool game_launched = false;
+
+gd::string current_music_path;
+
+bool block_music_stop;
+
+class $modify(MyAudioEngine, FMODAudioEngine)
+{	
+	void update(float dt)
+	{
+		FMODAudioEngine::update(dt);
+		if (!game_launched)
+			return;
+
+		bool isplaying;
+		this->m_backgroundMusicChannel->isPlaying(&isplaying);
+		if (!isplaying)
+		{
+			geode::log::info("Music finished picking another one!");
+			this->play_random_music();
+		}
+	}
+
+	void play_random_music()
+	{
+		auto music_manager = MusicDownloadManager::sharedState();
+
+		bool isplaying;
+		this->m_backgroundMusicChannel->isPlaying(&isplaying);
+		if (!isplaying)
+		{
+			std::vector<int> songs;
+			for (auto* song : CCArrayExt<SongInfoObject*>(music_manager->getDownloadedSongs()))
+			{
+				if (song->m_songID < 10000000)
+					songs.push_back(song->m_songID);
+			}
+
+			int song_id = songs[random::nextU64() % songs.size()];
+			auto song_path = music_manager->pathForSong(song_id);
+			this->stopAllMusic(true);
+			current_music_path = song_path;
+
+			this->playMusic(song_path, false, 0.0f, 0);
+			geode::log::info("Let's play music {}!", song_id);
+		}
+	}
+};
+
+class $modify(MyCreatorLayer, CreatorLayer)
+{
+	void onBack(CCObject* sender) {
+		unsigned int backgroundMusicPosition;
+
+		FMOD::Channel *channel = nullptr;
+		auto fmod = FMODAudioEngine::sharedEngine();
+		auto result = fmod->m_backgroundMusicChannel->getChannel(0, &channel);
+		if (result == FMOD_OK && channel) {
+			channel->getPosition(&backgroundMusicPosition, FMOD_TIMEUNIT_MS);
+		}
+
+		block_music_stop = true;
+		
+		CreatorLayer::onBack(sender);
+
+		fmod->resumeAllMusic();
+
+		//block_music_stop = false;
+
+		/*auto main_menu = MenuLayer::scene(false);
+		auto fader = CCTransitionFade::create(0.5, main_menu);
+		auto director = CCDirector::sharedDirector();
+		if (!director->replaceScene(fader))
+			return ;*/
+
+		//sender->release()
+
+		//fmod->set
+		
+		/*if (result == FMOD_OK && channel) {
+			fmod->playMusic(current_music_path, false, 0.0f, 0);
+			geode::log::debug("pos: {}", backgroundMusicPosition);
+			channel->setPosition(backgroundMusicPosition, FMOD_TIMEUNIT_MS);
+		}*/
+	}
+};
+
+class $modify(AppDelegate)
+{
+	void applicationWillEnterForeground() {
+        AppDelegate::applicationWillEnterForeground();
+		auto fmod = FMODAudioEngine::sharedEngine();
+		fmod->setBackgroundMusicVolume(old_background_music_volume);
+    }
+
+    // Keep the music playing in the background
+    void applicationDidEnterBackground() {
+		auto fmod = FMODAudioEngine::sharedEngine();
+        AppDelegate::applicationDidEnterBackground();
+		old_background_music_volume = fmod->getBackgroundMusicVolume();
+		fmod->setBackgroundMusicVolume(old_background_music_volume / 3.0f);
+		fmod->resumeAllMusic();
+    }
+};
+
 class $modify(MyMenuLayer, MenuLayer) {
 	struct Fields {
         FMOD::DSP* m_fftDSP = nullptr;
@@ -41,6 +158,9 @@ class $modify(MyMenuLayer, MenuLayer) {
 		if (!MenuLayer::init()) {
 			return false;
 		}
+		geode::log::debug("in main menu");
+
+		game_launched = true;
 		
 		auto main_menu = this->getChildByID("main-menu");
 		auto play_button = main_menu->getChildByID("play-button");
@@ -102,26 +222,12 @@ class $modify(MyMenuLayer, MenuLayer) {
 			m_fields->m_fftDSP->setMeteringEnabled(true, false);
 		}
 
-		auto music_manager = MusicDownloadManager::sharedState();
-		std::vector<int> songs;
-		for (auto* song : CCArrayExt<SongInfoObject*>(music_manager->getDownloadedSongs()))
-		{
-			if (song->m_songID < 10000000)
-				songs.push_back(song->m_songID);
-		}
-
-		engine->stopAllMusic(true);
-		auto song_path = music_manager->pathForSong(songs[random::nextU64() % songs.size()]);
-		engine->playMusic(song_path, false, 0.0f, 0);
-
-
-
-		this->schedule(schedule_selector(MyMenuLayer::function_not_already_used));
+		this->schedule(schedule_selector(MyMenuLayer::update_beats));
 
 		return true;
 	}
 	
-	void function_not_already_used(float dt) {
+	void update_beats(float dt) {
 		// Get the volume
 		FMOD_DSP_METERING_INFO info;
 		if (m_fields->m_fftDSP->getMeteringInfo(&info, nullptr) != FMOD_OK) {
