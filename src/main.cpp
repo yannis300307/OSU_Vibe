@@ -1,12 +1,18 @@
+#include "Geode/DefaultInclude.hpp"
 #include "Geode/c++stl/string.hpp"
 #include "Geode/cocos/CCDirector.h"
 #include "Geode/cocos/base_nodes/CCNode.h"
 #include "Geode/cocos/cocoa/CCGeometry.h"
+#include "Geode/cocos/cocoa/CCObject.h"
+#include "Geode/cocos/label_nodes/CCLabelBMFont.h"
 #include "Geode/cocos/layers_scenes_transitions_nodes/CCTransition.h"
+#include "Geode/cocos/menu_nodes/CCMenu.h"
 #include "Geode/cocos/sprite_nodes/CCSprite.h"
 #include "Geode/loader/Log.hpp"
+#include "Geode/ui/BasedButtonSprite.hpp"
 #include "Geode/utils/addresser.hpp"
 #include "fmod.hpp"
+#include "fmod_common.h"
 #include <Geode/Geode.hpp>
 #include <Geode/binding/AppDelegate.hpp>
 #include <Geode/binding/CCMenuItemSpriteExtra.hpp>
@@ -45,10 +51,30 @@ bool game_launched = false;
 
 gd::string current_music_path;
 
-bool block_music_stop;
-
 class $modify(MyAudioEngine, FMODAudioEngine)
-{	
+{
+	struct Fields
+	{
+		std::vector<int> songs;
+		int next_music = 0;
+	};
+
+	bool create_playlist() {
+		auto music_manager = MusicDownloadManager::sharedState();
+		for (auto* song : CCArrayExt<SongInfoObject*>(music_manager->getDownloadedSongs()))
+			{
+				if (song->m_songID < 10000000)
+					this->m_fields->songs.push_back(song->m_songID);
+			}
+		
+		std::random_device rd;
+		std::mt19937 g(rd());
+
+		shuffle(this->m_fields->songs.begin(), this->m_fields->songs.end(), g);
+		geode::log::info("Creating playlist");
+		return true;
+	}
+
 	void update(float dt)
 	{
 		FMODAudioEngine::update(dt);
@@ -60,11 +86,11 @@ class $modify(MyAudioEngine, FMODAudioEngine)
 		if (!isplaying)
 		{
 			geode::log::info("Music finished picking another one!");
-			this->play_random_music();
+			this->play_next_music_if_finished();
 		}
 	}
 
-	void play_random_music()
+	void play_next_music_if_finished()
 	{
 		auto music_manager = MusicDownloadManager::sharedState();
 
@@ -72,14 +98,11 @@ class $modify(MyAudioEngine, FMODAudioEngine)
 		this->m_backgroundMusicChannel->isPlaying(&isplaying);
 		if (!isplaying)
 		{
-			std::vector<int> songs;
-			for (auto* song : CCArrayExt<SongInfoObject*>(music_manager->getDownloadedSongs()))
-			{
-				if (song->m_songID < 10000000)
-					songs.push_back(song->m_songID);
-			}
+			this->m_fields->next_music++;
+			if (this->m_fields->next_music >= this->m_fields->songs.size())
+				this->m_fields->next_music = 0;
+			int song_id = this->m_fields->songs[this->m_fields->next_music];
 
-			int song_id = songs[random::nextU64() % songs.size()];
 			auto song_path = music_manager->pathForSong(song_id);
 			this->stopAllMusic(true);
 			current_music_path = song_path;
@@ -88,6 +111,127 @@ class $modify(MyAudioEngine, FMODAudioEngine)
 			geode::log::info("Let's play music {}!", song_id);
 		}
 	}
+
+	void play_previous_music()
+	{
+		auto music_manager = MusicDownloadManager::sharedState();
+
+		this->m_fields->next_music--;
+		if (this->m_fields->next_music < 0)
+			this->m_fields->next_music = this->m_fields->songs.size() - 1;
+
+		int song_id = this->m_fields->songs[this->m_fields->next_music];
+
+		auto song_path = music_manager->pathForSong(song_id);
+		this->stopAllMusic(true);
+		current_music_path = song_path;
+
+		this->playMusic(song_path, false, 0.0f, 0);
+		geode::log::info("Let's play music {}!", song_id);
+	}
+
+	void skip_music()
+	{
+		this->stopAllMusic(true);
+		this->play_next_music_if_finished();
+	}
+};
+
+$execute {
+	auto engine = FMODAudioEngine::sharedEngine();
+	static_cast<MyAudioEngine *>(engine)->create_playlist();
+}
+
+class MusicPlayer : public CCMenu {
+	protected:
+		bool init()
+		{
+			if (!CCMenu::init())
+				return false;
+
+			auto music_player_menu_background = CCSprite::create("music_player_container.png"_spr);
+			music_player_menu_background->setScale(0.1f);
+
+			this->addChild(music_player_menu_background);
+
+			auto next_sprite = CCSprite::create("next_icon.png"_spr);
+			next_sprite->setScale(0.05f);
+
+			auto music_player_next_music = CCMenuItemSpriteExtra::create(
+				next_sprite, this, menu_selector(MusicPlayer::next_music)
+			);
+			music_player_next_music->setPosition({38, -16});
+
+			this->addChild(music_player_next_music);
+
+			auto previous_sprite = CCSprite::create("next_icon.png"_spr);
+			previous_sprite->setScale(0.05f);
+			previous_sprite->setFlipX(true);
+
+			auto music_player_previous_music = CCMenuItemSpriteExtra::create(
+				previous_sprite, this, menu_selector(MusicPlayer::previous_music)
+			);
+			music_player_previous_music->setPosition({-38, -16});
+
+			this->addChild(music_player_previous_music);
+
+			auto music_id_sprite = CCLabelBMFont::create("ID: test", "MusicPlayerFont.fnt"_spr);
+
+			auto music_id = CCMenuItemSpriteExtra::create(
+				music_id_sprite, this, nullptr
+			);
+			music_id->setPosition({0, -24});
+
+			this->addChild(music_id);
+
+			auto vinyl_sprite = CCSprite::create("vinyl.png"_spr);
+			vinyl_sprite->setScale(0.125f);
+			vinyl_sprite->setID("vinyl");
+			vinyl_sprite->setPosition({-28, 11});
+			this->addChild(vinyl_sprite);
+
+			auto vinyl_head_sprite = CCSprite::create("vinyl_head.png"_spr);
+			vinyl_head_sprite->setScale(0.125f);
+			vinyl_head_sprite->setPosition({-17, 15});
+			this->addChild(vinyl_head_sprite);
+
+			this->schedule(schedule_selector(MusicPlayer::update_menu));
+
+			this->updateLayout();
+
+			return true;
+		}
+	
+	public:
+		void update_menu(float dt)
+		{
+			auto vinyl_sprite = this->getChildByID("vinyl");
+
+			vinyl_sprite->setRotation(vinyl_sprite->getRotation() + dt * 100.0f);
+		}
+
+		static MusicPlayer* create() {
+			auto ret = new MusicPlayer();
+			if (ret->init()) {
+				ret->autorelease();
+				return ret;
+			}
+
+			delete ret;
+			return nullptr;
+    	}
+
+		void next_music(CCObject* sender)
+		{
+			auto engine = FMODAudioEngine::sharedEngine();
+			static_cast<MyAudioEngine *>(engine)->skip_music();
+		}
+
+		void previous_music(CCObject* sender)
+		{
+			auto engine = FMODAudioEngine::sharedEngine();
+			static_cast<MyAudioEngine *>(engine)->play_previous_music();
+		}
 };
 
 class $modify(MyCreatorLayer, CreatorLayer)
@@ -99,32 +243,17 @@ class $modify(MyCreatorLayer, CreatorLayer)
 		auto fmod = FMODAudioEngine::sharedEngine();
 		auto result = fmod->m_backgroundMusicChannel->getChannel(0, &channel);
 		if (result == FMOD_OK && channel) {
-			channel->getPosition(&backgroundMusicPosition, FMOD_TIMEUNIT_MS);
+			channel->getPosition(&backgroundMusicPosition, FMOD_TIMEUNIT_PCM);
 		}
-
-		block_music_stop = true;
 		
 		CreatorLayer::onBack(sender);
 
-		fmod->resumeAllMusic();
-
-		//block_music_stop = false;
-
-		/*auto main_menu = MenuLayer::scene(false);
-		auto fader = CCTransitionFade::create(0.5, main_menu);
-		auto director = CCDirector::sharedDirector();
-		if (!director->replaceScene(fader))
-			return ;*/
-
-		//sender->release()
-
-		//fmod->set
-		
-		/*if (result == FMOD_OK && channel) {
-			fmod->playMusic(current_music_path, false, 0.0f, 0);
+		fmod->playMusic(current_music_path, false, 0.0f, 0);
+		result = fmod->m_backgroundMusicChannel->getChannel(0, &channel);
+		if (result == FMOD_OK && channel) {
 			geode::log::debug("pos: {}", backgroundMusicPosition);
-			channel->setPosition(backgroundMusicPosition, FMOD_TIMEUNIT_MS);
-		}*/
+			channel->setPosition(backgroundMusicPosition, FMOD_TIMEUNIT_PCM);
+		}
 	}
 };
 
@@ -200,8 +329,6 @@ class $modify(MyMenuLayer, MenuLayer) {
 		}
 		main_menu->addChild(beats_pool);
 
-		this->updateLayout();
-
 		// Reset the amplitude values
 		std::fill(this->m_fields->beats_amplitude, this->m_fields->beats_amplitude + BEATS_AMOUNT, 0.0f);
 
@@ -223,6 +350,16 @@ class $modify(MyMenuLayer, MenuLayer) {
 		}
 
 		this->schedule(schedule_selector(MyMenuLayer::update_beats));
+		
+		this->removeChildByID("more-games-menu"); // Sorry but this button is currently useless
+
+		auto music_player = MusicPlayer::create();
+		music_player->setPosition({511, 42});
+		music_player->setID("music-player-menu");
+
+		this->addChild(music_player);
+
+		this->updateLayout();
 
 		return true;
 	}

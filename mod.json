@@ -17,7 +17,17 @@
 	"resources": {
         "sprites": [
             "resources/play_button.png",
-			"resources/beat.png"
-        ]
+			"resources/beat.png",
+			"resources/music_player_container.png",
+			"resources/next_icon.png",
+			"resources/vinyl.png",
+			"resources/vinyl_head.png"
+        ],
+		"fonts": {
+            "MusicPlayerFont": {
+                "path": "resources/font.ttf",
+                "size": 30
+            }
+        }
     }
 }
