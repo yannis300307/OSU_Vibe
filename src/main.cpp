@@ -4,6 +4,7 @@
 #include "Geode/cocos/base_nodes/CCNode.h"
 #include "Geode/cocos/cocoa/CCGeometry.h"
 #include "Geode/cocos/cocoa/CCObject.h"
+#include "Geode/cocos/cocoa/CCString.h"
 #include "Geode/cocos/label_nodes/CCLabelBMFont.h"
 #include "Geode/cocos/layers_scenes_transitions_nodes/CCTransition.h"
 #include "Geode/cocos/menu_nodes/CCMenu.h"
@@ -24,8 +25,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <format>
 #include <numbers>
 #include <Geode/modify/MenuLayer.hpp>
+#include <string>
 #include <vector>
 #include <Geode/modify/AppDelegate.hpp>
 #include <Geode/modify/FMODAudioEngine.hpp>
@@ -56,7 +59,7 @@ class $modify(MyAudioEngine, FMODAudioEngine)
 	struct Fields
 	{
 		std::vector<int> songs;
-		int next_music = 0;
+		int current_music = 0;
 	};
 
 	bool create_playlist() {
@@ -98,10 +101,10 @@ class $modify(MyAudioEngine, FMODAudioEngine)
 		this->m_backgroundMusicChannel->isPlaying(&isplaying);
 		if (!isplaying)
 		{
-			this->m_fields->next_music++;
-			if (this->m_fields->next_music >= this->m_fields->songs.size())
-				this->m_fields->next_music = 0;
-			int song_id = this->m_fields->songs[this->m_fields->next_music];
+			this->m_fields->current_music++;
+			if (this->m_fields->current_music >= this->m_fields->songs.size())
+				this->m_fields->current_music = 0;
+			int song_id = this->m_fields->songs[this->m_fields->current_music];
 
 			auto song_path = music_manager->pathForSong(song_id);
 			this->stopAllMusic(true);
@@ -116,11 +119,11 @@ class $modify(MyAudioEngine, FMODAudioEngine)
 	{
 		auto music_manager = MusicDownloadManager::sharedState();
 
-		this->m_fields->next_music--;
-		if (this->m_fields->next_music < 0)
-			this->m_fields->next_music = this->m_fields->songs.size() - 1;
+		this->m_fields->current_music--;
+		if (this->m_fields->current_music < 0)
+			this->m_fields->current_music = this->m_fields->songs.size() - 1;
 
-		int song_id = this->m_fields->songs[this->m_fields->next_music];
+		int song_id = this->m_fields->songs[this->m_fields->current_music];
 
 		auto song_path = music_manager->pathForSong(song_id);
 		this->stopAllMusic(true);
@@ -144,6 +147,8 @@ $execute {
 
 class MusicPlayer : public CCMenu {
 	protected:
+		int old_music_index = -1;
+
 		bool init()
 		{
 			if (!CCMenu::init())
@@ -176,13 +181,36 @@ class MusicPlayer : public CCMenu {
 			this->addChild(music_player_previous_music);
 
 			auto music_id_sprite = CCLabelBMFont::create("ID: test", "MusicPlayerFont.fnt"_spr);
-
 			auto music_id = CCMenuItemSpriteExtra::create(
 				music_id_sprite, this, nullptr
 			);
+			music_id->setID("music-id");
 			music_id->setPosition({0, -24});
 
 			this->addChild(music_id);
+
+			auto music_name_sprite = CCLabelBMFont::create("Name test", "MusicPlayerFont.fnt"_spr);
+			music_name_sprite->setWidth(50.0f);
+			music_name_sprite->setAlignment(CCTextAlignment::kCCTextAlignmentRight);
+			auto music_name = CCMenuItemSpriteExtra::create(
+				music_name_sprite, this, nullptr
+			);
+			music_name->setID("music-name");
+			music_name->setPosition({19, 16});
+			music_name->setContentSize({57, 25});
+			music_name_sprite->setPosition(music_name->getContentSize() / 2.0f);
+
+			this->addChild(music_name);
+
+			auto artist_name_sprite = CCLabelBMFont::create("name", "MusicPlayerFont.fnt"_spr);
+			auto artist_name = CCMenuItemSpriteExtra::create(
+				artist_name_sprite, this, nullptr
+			);
+			artist_name->setID("artist-name");
+			artist_name->setPosition({17, -1});
+			artist_name_sprite->setWidth(15);
+
+			this->addChild(artist_name);
 
 			auto vinyl_sprite = CCSprite::create("vinyl.png"_spr);
 			vinyl_sprite->setScale(0.125f);
@@ -192,7 +220,9 @@ class MusicPlayer : public CCMenu {
 
 			auto vinyl_head_sprite = CCSprite::create("vinyl_head.png"_spr);
 			vinyl_head_sprite->setScale(0.125f);
-			vinyl_head_sprite->setPosition({-17, 15});
+			vinyl_head_sprite->setPosition({-17, 29});
+			vinyl_head_sprite->setAnchorPoint({1, 1});
+			vinyl_head_sprite->setID("vinyl-head");
 			this->addChild(vinyl_head_sprite);
 
 			this->schedule(schedule_selector(MusicPlayer::update_menu));
@@ -205,9 +235,65 @@ class MusicPlayer : public CCMenu {
 	public:
 		void update_menu(float dt)
 		{
+			auto engine = FMODAudioEngine::sharedEngine();
+			auto custom_engine = static_cast<MyAudioEngine *>(engine);
+			if (custom_engine->m_fields->current_music != this->old_music_index)
+			{
+				int music_id = custom_engine->m_fields->songs[custom_engine->m_fields->current_music];
+
+				auto music_manager = MusicDownloadManager::sharedState();
+				auto music_name = music_manager->getSongInfoObject(music_id)->m_songName;
+				auto artist_name = music_manager->getSongInfoObject(music_id)->m_artistName;
+
+				auto music_id_sprite = static_cast<CCLabelBMFont *>(this->getChildByID("music-id")->getChildByIndex(0));
+
+				music_id_sprite->setCString(std::format("ID: {}", music_id).c_str());
+				music_id_sprite->updateLabel();
+
+				auto music_name_container = this->getChildByID("music-name");
+				auto music_name_sprite = static_cast<CCLabelBMFont *>(music_name_container->getChildByIndex(0));
+
+				music_name_sprite->setCString(music_name.c_str());
+
+				music_name_sprite->setScale(1.0f);
+    
+				float currentHeight = music_name_sprite->getContentSize().height;
+				float max_height = music_name_container->getContentHeight();
+
+				if (currentHeight > max_height) {
+					float newScale = max_height / currentHeight;
+					music_name_sprite->setScale(newScale);
+				}
+				music_name_sprite->updateLabel();
+				
+				auto artist_name_sprite = static_cast<CCLabelBMFont *>(this->getChildByID("artist-name")->getChildByIndex(0));
+
+				artist_name_sprite->setCString(std::format("{}", artist_name).c_str());
+				artist_name_sprite->updateLabel();
+			}
+
 			auto vinyl_sprite = this->getChildByID("vinyl");
+			auto vinyl_head_sprite = this->getChildByID("vinyl-head");
 
 			vinyl_sprite->setRotation(vinyl_sprite->getRotation() + dt * 100.0f);
+			
+			FMOD::Channel *channel = nullptr;
+			auto result = engine->m_backgroundMusicChannel->getChannel(0, &channel);
+
+			if (result == FMOD_OK && channel) {
+				FMOD::Sound* current_sound = nullptr;
+				unsigned int music_pos;
+				channel->getPosition(&music_pos, FMOD_TIMEUNIT_MS);
+
+				channel->getCurrentSound(&current_sound);
+				unsigned int music_lenght;
+				current_sound->getLength(&music_lenght, FMOD_TIMEUNIT_MS);
+				
+				if (music_lenght > 0) {
+					float pos =  static_cast<float>(music_pos) / static_cast<float>(music_lenght);
+					vinyl_head_sprite->setRotation(-22.0f + 27.0f * pos);
+            	}
+			}
 		}
 
 		static MusicPlayer* create() {
