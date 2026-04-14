@@ -1,3 +1,4 @@
+#include "GUI/CCControlExtension/CCControl.h"
 #include "Geode/DefaultInclude.hpp"
 #include "Geode/c++stl/string.hpp"
 #include "Geode/cocos/CCDirector.h"
@@ -8,10 +9,14 @@
 #include "Geode/cocos/label_nodes/CCLabelBMFont.h"
 #include "Geode/cocos/layers_scenes_transitions_nodes/CCTransition.h"
 #include "Geode/cocos/menu_nodes/CCMenu.h"
+#include "Geode/cocos/robtop/mouse_dispatcher/CCMouseDelegate.h"
+#include "Geode/cocos/robtop/mouse_dispatcher/CCMouseDispatcher.h"
 #include "Geode/cocos/sprite_nodes/CCSprite.h"
 #include "Geode/loader/Log.hpp"
 #include "Geode/ui/BasedButtonSprite.hpp"
+#include "Geode/utils/Keyboard.hpp"
 #include "Geode/utils/addresser.hpp"
+#include "Geode/utils/cocos.hpp"
 #include "fmod.hpp"
 #include "fmod_common.h"
 #include <Geode/Geode.hpp>
@@ -148,13 +153,18 @@ $execute {
 class MusicPlayer : public CCMenu {
 	protected:
 		int old_music_index = -1;
+		bool is_mouse_down = false;
 
 		bool init()
 		{
 			if (!CCMenu::init())
 				return false;
 
+			this->setContentSize({100.0f, 50.0f});
+			auto center = this->getContentSize() / 2.0f;
+
 			auto music_player_menu_background = CCSprite::create("music_player_container.png"_spr);
+			music_player_menu_background->setPosition(center);
 			music_player_menu_background->setScale(0.1f);
 
 			this->addChild(music_player_menu_background);
@@ -165,7 +175,7 @@ class MusicPlayer : public CCMenu {
 			auto music_player_next_music = CCMenuItemSpriteExtra::create(
 				next_sprite, this, menu_selector(MusicPlayer::next_music)
 			);
-			music_player_next_music->setPosition({38, -16});
+			music_player_next_music->setPosition({38 + center.width, -16 + center.height});
 
 			this->addChild(music_player_next_music);
 
@@ -176,16 +186,16 @@ class MusicPlayer : public CCMenu {
 			auto music_player_previous_music = CCMenuItemSpriteExtra::create(
 				previous_sprite, this, menu_selector(MusicPlayer::previous_music)
 			);
-			music_player_previous_music->setPosition({-38, -16});
+			music_player_previous_music->setPosition({-38 + center.width, -16 + center.height});
 
 			this->addChild(music_player_previous_music);
 
 			auto music_id_sprite = CCLabelBMFont::create("ID: test", "MusicPlayerFont.fnt"_spr);
 			auto music_id = CCMenuItemSpriteExtra::create(
-				music_id_sprite, this, nullptr
+				music_id_sprite, this, menu_selector(MusicPlayer::search_current_song)
 			);
 			music_id->setID("music-id");
-			music_id->setPosition({0, -24});
+			music_id->setPosition({0 + center.width, -24 + center.height});
 
 			this->addChild(music_id);
 
@@ -196,7 +206,7 @@ class MusicPlayer : public CCMenu {
 				music_name_sprite, this, nullptr
 			);
 			music_name->setID("music-name");
-			music_name->setPosition({19, 16});
+			music_name->setPosition({19 + center.width, 16 + center.height});
 			music_name->setContentSize({57, 25});
 			music_name_sprite->setPosition(music_name->getContentSize() / 2.0f);
 
@@ -207,7 +217,7 @@ class MusicPlayer : public CCMenu {
 				artist_name_sprite, this, nullptr
 			);
 			artist_name->setID("artist-name");
-			artist_name->setPosition({17, -1});
+			artist_name->setPosition({17 + center.width, -1 + center.height});
 			artist_name_sprite->setWidth(15);
 
 			this->addChild(artist_name);
@@ -215,15 +225,37 @@ class MusicPlayer : public CCMenu {
 			auto vinyl_sprite = CCSprite::create("vinyl.png"_spr);
 			vinyl_sprite->setScale(0.125f);
 			vinyl_sprite->setID("vinyl");
-			vinyl_sprite->setPosition({-28, 11});
+			vinyl_sprite->setPosition({-28 + center.width, 11 + center.height});
 			this->addChild(vinyl_sprite);
 
 			auto vinyl_head_sprite = CCSprite::create("vinyl_head.png"_spr);
 			vinyl_head_sprite->setScale(0.125f);
-			vinyl_head_sprite->setPosition({-17, 29});
-			vinyl_head_sprite->setAnchorPoint({1, 1});
+			vinyl_head_sprite->setPosition({-17.0f + center.width, 29.0f + center.height});
+			vinyl_head_sprite->setAnchorPoint({1.0f, 1.0f});
 			vinyl_head_sprite->setID("vinyl-head");
 			this->addChild(vinyl_head_sprite);
+
+			auto progress_bar_left_edge_sprite = CCSprite::create("progress_edge.png"_spr);
+			progress_bar_left_edge_sprite->setScale(0.1f);
+			progress_bar_left_edge_sprite->setPosition({-24.9f + center.width, -16.45f + center.height});
+			progress_bar_left_edge_sprite->setAnchorPoint({1.0f, 0.5f});
+			progress_bar_left_edge_sprite->setID("progress-bar-left-edge");
+			this->addChild(progress_bar_left_edge_sprite);
+
+			auto progress_bar_sprite = CCSprite::create("progress_bar.png"_spr);
+			progress_bar_sprite->setScale(0.1f);
+			progress_bar_sprite->setPosition({-24.9f + center.width, -16.45f+ center.height});
+			progress_bar_sprite->setAnchorPoint({0.0f, 0.5f});
+			progress_bar_sprite->setID("progress-bar");
+			this->addChild(progress_bar_sprite);
+
+			auto progress_bar_right_edge_sprite = CCSprite::create("progress_edge.png"_spr);
+			progress_bar_right_edge_sprite->setScale(0.1f);
+			progress_bar_right_edge_sprite->setFlipX(true);
+			progress_bar_right_edge_sprite->setPosition({24.9f + center.width, -16.45f + center.height});
+			progress_bar_right_edge_sprite->setAnchorPoint({0.0f, 0.5f});
+			progress_bar_right_edge_sprite->setID("progress-bar-right-edge");
+			this->addChild(progress_bar_right_edge_sprite);
 
 			this->schedule(schedule_selector(MusicPlayer::update_menu));
 
@@ -231,8 +263,50 @@ class MusicPlayer : public CCMenu {
 
 			return true;
 		}
-	
+
+		bool mouse_touches_progress_bar()
+		{
+			auto progress_bar_sprite = this->getChildByID("progress-bar");
+			auto mouse_pos = getMousePos();
+			auto relative_mouse_pos = mouse_pos - progress_bar_sprite->convertToWorldSpace(CCPointZero);
+			auto actual_size = progress_bar_sprite->getContentSize() * 0.1f;
+
+			return relative_mouse_pos.x > 0.0f && relative_mouse_pos.x < actual_size.width && relative_mouse_pos.y > 0 && relative_mouse_pos.y < actual_size.height;
+		}
+
+		void search_song(int songID, bool isCustom) {
+			auto search_obj = GJSearchObject::create(SearchType::Search);
+			
+			search_obj->m_songID = songID;
+			search_obj->m_songFilter = true;
+			search_obj->m_customSongFilter = isCustom;
+			
+			auto scene = LevelBrowserLayer::scene(search_obj);
+			
+			CCDirector::get()->pushScene(CCTransitionFade::create(0.5f, scene));
+		}
 	public:
+		bool ccTouchBegan(CCTouch* touch, CCEvent* event)
+		{
+			if (this->mouse_touches_progress_bar())
+			{
+				geode::log::debug("yes");
+				this->is_mouse_down = true;
+				return true;
+			}
+			return CCMenu::ccTouchBegan(touch, event);
+		}
+
+		void ccTouchEnded(CCTouch* touch, CCEvent* event) {
+    		this->is_mouse_down = false;
+			CCMenu::ccTouchEnded(touch, event);
+		}
+
+		void ccTouchCancelled(CCTouch* touch, CCEvent* event) {
+			this->is_mouse_down = false;
+			CCMenu::ccTouchCancelled(touch, event);
+		}
+
 		void update_menu(float dt)
 		{
 			auto engine = FMODAudioEngine::sharedEngine();
@@ -276,6 +350,8 @@ class MusicPlayer : public CCMenu {
 			auto vinyl_head_sprite = this->getChildByID("vinyl-head");
 
 			vinyl_sprite->setRotation(vinyl_sprite->getRotation() + dt * 100.0f);
+			if (vinyl_sprite->getRotation() > 360.0f)
+				vinyl_sprite->setRotation(0.0f);
 			
 			FMOD::Channel *channel = nullptr;
 			auto result = engine->m_backgroundMusicChannel->getChannel(0, &channel);
@@ -290,8 +366,37 @@ class MusicPlayer : public CCMenu {
 				current_sound->getLength(&music_lenght, FMOD_TIMEUNIT_MS);
 				
 				if (music_lenght > 0) {
-					float pos =  static_cast<float>(music_pos) / static_cast<float>(music_lenght);
-					vinyl_head_sprite->setRotation(-22.0f + 27.0f * pos);
+					float progress =  static_cast<float>(music_pos) / static_cast<float>(music_lenght);
+					vinyl_head_sprite->setRotation(-22.0f + 27.0f * progress);
+
+					auto progress_bar_sprite = this->getChildByID("progress-bar");
+					auto progress_bar_right_edge_sprite = this->getChildByID("progress-bar-right-edge");
+
+					auto mouse_pos = getMousePos();
+
+					progress_bar_sprite->setScaleX(progress * 0.1f);
+					auto relative_mouse_pos = mouse_pos - progress_bar_sprite->convertToWorldSpace(CCPointZero);
+
+					auto actual_size = progress_bar_sprite->getContentSize() * 0.1f;
+
+					if (is_mouse_down && mouse_touches_progress_bar())
+					{
+						channel->setPaused(true);
+						channel->setPosition(music_lenght * relative_mouse_pos.x / actual_size.width, FMOD_TIMEUNIT_MS);
+					} else if (!is_mouse_down)
+					{
+						channel->setPaused(false);
+					}
+
+					progress_bar_right_edge_sprite->setPositionX(-actual_size.width / 2.0f + actual_size.width * progress + this->getContentWidth() / 2.0f - 0.05f);
+
+					/*relative_mouse_pos = mouse_pos - vinyl_sprite->convertToWorldSpace(CCPointZero);
+					auto radius  = vinyl_sprite->getContentWidth() * 0.125f / 2.0f;
+					geode::log::debug("dist : {}", relative_mouse_pos.getDistance(CCPointZero));
+					if (is_mouse_down && relative_mouse_pos.x > 0.0f && relative_mouse_pos.getDistance(CCPointZero) < radius)
+					{
+						geode::log::debug("{}", (mouse_pos - vinyl_sprite->convertToWorldSpace(CCPointZero)).getAngle());
+					}*/
             	}
 			}
 		}
@@ -317,6 +422,14 @@ class MusicPlayer : public CCMenu {
 		{
 			auto engine = FMODAudioEngine::sharedEngine();
 			static_cast<MyAudioEngine *>(engine)->play_previous_music();
+		}
+
+		void search_current_song(CCObject* sender)
+		{
+			auto engine = FMODAudioEngine::sharedEngine();
+			auto custom_engine = static_cast<MyAudioEngine *>(engine);
+
+			this->search_song(custom_engine->m_fields->songs[custom_engine->m_fields->current_music], true);
 		}
 };
 
@@ -440,7 +553,7 @@ class $modify(MyMenuLayer, MenuLayer) {
 		this->removeChildByID("more-games-menu"); // Sorry but this button is currently useless
 
 		auto music_player = MusicPlayer::create();
-		music_player->setPosition({511, 42});
+		music_player->setPosition({456, 20});
 		music_player->setID("music-player-menu");
 
 		this->addChild(music_player);

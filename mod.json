@@ -15,19 +15,21 @@
 		"geode.node-ids": ">=v1.20.0"
 	},
 	"resources": {
-        "sprites": [
-            "resources/play_button.png",
+		"sprites": [
+			"resources/play_button.png",
 			"resources/beat.png",
 			"resources/music_player_container.png",
 			"resources/next_icon.png",
 			"resources/vinyl.png",
-			"resources/vinyl_head.png"
-        ],
+			"resources/progress_edge.png",
+			"resources/vinyl_head.png",
+			"resources/progress_bar.png"
+		],
 		"fonts": {
-            "MusicPlayerFont": {
-                "path": "resources/font.ttf",
-                "size": 30
-            }
-        }
-    }
+			"MusicPlayerFont": {
+				"path": "resources/font.ttf",
+				"size": 30
+			}
+		}
+	}
 }

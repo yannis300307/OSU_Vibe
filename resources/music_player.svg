@@ -24,9 +24,9 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#505050"
      inkscape:document-units="mm"
-     inkscape:zoom="2"
-     inkscape:cx="160.5"
-     inkscape:cy="270.25"
+     inkscape:zoom="1.8101934"
+     inkscape:cx="415.70145"
+     inkscape:cy="573.69562"
      inkscape:window-width="2560"
      inkscape:window-height="1414"
      inkscape:window-x="0"
@@ -98,8 +98,9 @@
          d="M 120.6908,115.54946 H 77.817246 Z"
          id="path7" /></g><path
        style="fill:#d50000;fill-opacity:1;stroke:#17b25c;stroke-width:2.14;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-opacity:1"
-       d="M 78.514376,117.51165 H 92.847233"
-       id="path8" /><g
+       d="m 78.514376,117.51165 42.873554,0"
+       id="path8"
+       sodipodi:nodetypes="cc" /><g
        id="g10"
        transform="matrix(-0.79856494,0,0,0.79856494,172.57965,25.79132)"><path
          sodipodi:type="star"
@@ -253,4 +254,10 @@
          height="4.2107697"
          x="32.82243"
          y="56.867634"
-         ry="1.1852015" /></g></g></svg>
+         ry="1.1852015" /></g><path
+       id="path4"
+       style="fill:#17b25c;fill-opacity:1;stroke:none;stroke-width:0.811001;stroke-linecap:round;stroke-linejoin:round"
+       d="m 110.04856,61.507056 a 1.0700001,1.0700001 0 0 0 -1.05368,1.069702 1.0700001,1.0700001 0 0 0 1.05368,1.069702 z"
+       inkscape:export-filename="progess_edge.png"
+       inkscape:export-xdpi="1177.191"
+       inkscape:export-ydpi="1177.191" /></g></svg>
