@@ -1,22 +1,16 @@
-#include "GUI/CCControlExtension/CCControl.h"
 #include "Geode/DefaultInclude.hpp"
 #include "Geode/c++stl/string.hpp"
 #include "Geode/cocos/CCDirector.h"
 #include "Geode/cocos/base_nodes/CCNode.h"
 #include "Geode/cocos/cocoa/CCGeometry.h"
 #include "Geode/cocos/cocoa/CCObject.h"
-#include "Geode/cocos/cocoa/CCString.h"
 #include "Geode/cocos/label_nodes/CCLabelBMFont.h"
 #include "Geode/cocos/layers_scenes_transitions_nodes/CCTransition.h"
 #include "Geode/cocos/menu_nodes/CCMenu.h"
-#include "Geode/cocos/robtop/mouse_dispatcher/CCMouseDelegate.h"
-#include "Geode/cocos/robtop/mouse_dispatcher/CCMouseDispatcher.h"
 #include "Geode/cocos/sprite_nodes/CCSprite.h"
 #include "Geode/loader/Log.hpp"
-#include "Geode/ui/BasedButtonSprite.hpp"
-#include "Geode/utils/Keyboard.hpp"
-#include "Geode/utils/addresser.hpp"
 #include "Geode/utils/cocos.hpp"
+#include "Geode/utils/web.hpp"
 #include "fmod.hpp"
 #include "fmod_common.h"
 #include <Geode/Geode.hpp>
@@ -24,13 +18,14 @@
 #include <Geode/binding/CCMenuItemSpriteExtra.hpp>
 #include <Geode/binding/GameLevelManager.hpp>
 #include <Geode/binding/MenuLayer.hpp>
+#include <Geode/binding/MusicDownloadDelegate.hpp>
 #include <Geode/binding/MusicDownloadManager.hpp>
 #include <Geode/binding/PauseLayer.hpp>
+#include <Geode/binding/SongInfoLayer.hpp>
+#include <Geode/binding/SongInfoObject.hpp>
 #include <Geode/cocos/draw_nodes/CCDrawingPrimitives.h>
 #include <algorithm>
 #include <cmath>
-#include <cstddef>
-#include <format>
 #include <numbers>
 #include <Geode/modify/MenuLayer.hpp>
 #include <string>
@@ -59,6 +54,31 @@ bool game_launched = false;
 
 gd::string current_music_path;
 
+// Taken from https://stackoverflow.com/questions/154536/encode-decode-urls-in-c
+std::string url_encode(const std::string &value) {
+    std::stringstream escaped;
+    escaped.fill('0');
+    escaped << std::hex;
+
+    for (std::string::const_iterator i = value.begin(), n = value.end(); i != n; ++i) {
+        std::string::value_type c = (*i);
+
+        // Keep alphanumeric and other accepted characters intact
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            escaped << c;
+            continue;
+        }
+
+        // Any other characters are percent-encoded
+        escaped << std::uppercase;
+        escaped << '%' << std::setw(2) << int((unsigned char) c);
+        escaped << std::nouppercase;
+    }
+
+    return escaped.str();
+}
+
+
 class $modify(MyAudioEngine, FMODAudioEngine)
 {
 	struct Fields
@@ -70,10 +90,10 @@ class $modify(MyAudioEngine, FMODAudioEngine)
 	bool create_playlist() {
 		auto music_manager = MusicDownloadManager::sharedState();
 		for (auto* song : CCArrayExt<SongInfoObject*>(music_manager->getDownloadedSongs()))
-			{
-				if (song->m_songID < 10000000)
-					this->m_fields->songs.push_back(song->m_songID);
-			}
+		{
+			if (!song->m_artistName.empty())
+				this->m_fields->songs.push_back(song->m_songID);
+		}
 		
 		std::random_device rd;
 		std::mt19937 g(rd());
@@ -203,7 +223,7 @@ class MusicPlayer : public CCMenu {
 			music_name_sprite->setWidth(50.0f);
 			music_name_sprite->setAlignment(CCTextAlignment::kCCTextAlignmentRight);
 			auto music_name = CCMenuItemSpriteExtra::create(
-				music_name_sprite, this, nullptr
+				music_name_sprite, this, menu_selector(MusicPlayer::open_current_song_url)
 			);
 			music_name->setID("music-name");
 			music_name->setPosition({19 + center.width, 16 + center.height});
@@ -285,6 +305,7 @@ class MusicPlayer : public CCMenu {
 			
 			CCDirector::get()->pushScene(CCTransitionFade::create(0.5f, scene));
 		}
+
 	public:
 		bool ccTouchBegan(CCTouch* touch, CCEvent* event)
 		{
@@ -314,6 +335,7 @@ class MusicPlayer : public CCMenu {
 			if (custom_engine->m_fields->current_music != this->old_music_index)
 			{
 				int music_id = custom_engine->m_fields->songs[custom_engine->m_fields->current_music];
+				old_music_index = music_id;
 
 				auto music_manager = MusicDownloadManager::sharedState();
 				auto music_name = music_manager->getSongInfoObject(music_id)->m_songName;
@@ -321,7 +343,7 @@ class MusicPlayer : public CCMenu {
 
 				auto music_id_sprite = static_cast<CCLabelBMFont *>(this->getChildByID("music-id")->getChildByIndex(0));
 
-				music_id_sprite->setCString(std::format("ID: {}", music_id).c_str());
+				music_id_sprite->setString(("ID: " + std::to_string(music_id)).c_str());
 				music_id_sprite->updateLabel();
 
 				auto music_name_container = this->getChildByID("music-name");
@@ -342,7 +364,7 @@ class MusicPlayer : public CCMenu {
 				
 				auto artist_name_sprite = static_cast<CCLabelBMFont *>(this->getChildByID("artist-name")->getChildByIndex(0));
 
-				artist_name_sprite->setCString(std::format("{}", artist_name).c_str());
+				artist_name_sprite->setCString(artist_name.c_str());
 				artist_name_sprite->updateLabel();
 			}
 
@@ -431,6 +453,37 @@ class MusicPlayer : public CCMenu {
 
 			this->search_song(custom_engine->m_fields->songs[custom_engine->m_fields->current_music], true);
 		}
+
+		void open_current_song_url(CCObject* sender)
+		{
+			auto engine = FMODAudioEngine::sharedEngine();
+			auto custom_engine = static_cast<MyAudioEngine *>(engine);
+			int music_id = custom_engine->m_fields->songs[custom_engine->m_fields->current_music];
+			auto music_manager = MusicDownloadManager::sharedState();
+			auto music = static_cast<SongInfoObject *>(music_manager->m_songObjects->objectForKey(std::to_string(music_id)));
+			auto ngArtistUrl = "https://" + music->m_artistName + ".newgrounds.com";
+			if (music_id > 10000000) {
+				if (!music->m_youtubeChannel.empty())
+					web::openLinkInBrowser("https://www.youtube.com/channel/" + music->m_youtubeChannel);
+				else
+				{
+
+				geode::createQuickPopup(
+					"Music not found",
+					"Sorry, I can't find anything for this music. Would you like to search it on Youtube?",
+					"No", "Yes",
+					[music](auto, bool btn2) {
+						if (btn2) {
+							web::openLinkInBrowser("https://www.youtube.com/results?search_query=" + url_encode(music->m_songName + " - " + music->m_artistName));
+						}
+					}
+				);
+				};
+			} else {
+				web::openLinkInBrowser("https://www.newgrounds.com/audio/listen/" + std::to_string(music_id));
+			}
+		}
+
 };
 
 class $modify(MyCreatorLayer, CreatorLayer)
