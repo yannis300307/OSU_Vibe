@@ -7,8 +7,12 @@
 #include "Geode/cocos/label_nodes/CCLabelBMFont.h"
 #include "Geode/cocos/layers_scenes_transitions_nodes/CCTransition.h"
 #include "Geode/cocos/menu_nodes/CCMenu.h"
+#include "Geode/cocos/misc_nodes/CCClippingNode.h"
 #include "Geode/cocos/sprite_nodes/CCSprite.h"
+#include "Geode/cocos/textures/CCTexture2D.h"
 #include "Geode/loader/Log.hpp"
+#include "Geode/ui/Layout.hpp"
+#include "Geode/ui/LazySprite.hpp"
 #include "Geode/utils/cocos.hpp"
 #include "Geode/utils/web.hpp"
 #include "fmod.hpp"
@@ -53,6 +57,12 @@ float old_background_music_volume = 0.0f;
 bool game_launched = false;
 
 gd::string current_music_path;
+
+std::string get_link_from_music_id(int music_id, std::string format)
+{
+	// @geode-ignore(unknown-resource)
+	return "https://aicon.ngfiles.com/" + std::to_string(music_id / 1000) + "/" + std::to_string(music_id) + "." + format;
+}
 
 // Taken from https://stackoverflow.com/questions/154536/encode-decode-urls-in-c
 std::string url_encode(const std::string &value) {
@@ -172,7 +182,7 @@ $execute {
 
 class MusicPlayer : public CCMenu {
 	protected:
-		int old_music_index = -1;
+		int old_music_id = -1;
 		bool is_mouse_down = false;
 
 		bool init()
@@ -210,6 +220,7 @@ class MusicPlayer : public CCMenu {
 
 			this->addChild(music_player_previous_music);
 
+			// @geode-ignore(unknown-resource)
 			auto music_id_sprite = CCLabelBMFont::create("ID: test", "MusicPlayerFont.fnt"_spr);
 			auto music_id = CCMenuItemSpriteExtra::create(
 				music_id_sprite, this, menu_selector(MusicPlayer::search_current_song)
@@ -219,6 +230,7 @@ class MusicPlayer : public CCMenu {
 
 			this->addChild(music_id);
 
+			// @geode-ignore(unknown-resource)
 			auto music_name_sprite = CCLabelBMFont::create("Name test", "MusicPlayerFont.fnt"_spr);
 			music_name_sprite->setWidth(50.0f);
 			music_name_sprite->setAlignment(CCTextAlignment::kCCTextAlignmentRight);
@@ -232,6 +244,7 @@ class MusicPlayer : public CCMenu {
 
 			this->addChild(music_name);
 
+			// @geode-ignore(unknown-resource)
 			auto artist_name_sprite = CCLabelBMFont::create("name", "MusicPlayerFont.fnt"_spr);
 			auto artist_name = CCMenuItemSpriteExtra::create(
 				artist_name_sprite, this, nullptr
@@ -253,6 +266,7 @@ class MusicPlayer : public CCMenu {
 			vinyl_head_sprite->setPosition({-17.0f + center.width, 29.0f + center.height});
 			vinyl_head_sprite->setAnchorPoint({1.0f, 1.0f});
 			vinyl_head_sprite->setID("vinyl-head");
+			vinyl_head_sprite->setZOrder(3);
 			this->addChild(vinyl_head_sprite);
 
 			auto progress_bar_left_edge_sprite = CCSprite::create("progress_edge.png"_spr);
@@ -277,9 +291,36 @@ class MusicPlayer : public CCMenu {
 			progress_bar_right_edge_sprite->setID("progress-bar-right-edge");
 			this->addChild(progress_bar_right_edge_sprite);
 
+			auto vinyl_center = CCPoint(-28 + center.width, 11 + center.height);
+			auto mask = CCSprite::create("vinyl_mask.png"_spr);
+			mask->setScale(0.125f);
+			mask->setID("vinyl");
+			auto vinyl_clipping = CCClippingNode::create();
+			vinyl_clipping->setPosition({-28 + center.width, 11 + center.height});
+			//vinyl_clipping->setContentSize(m_bgSprite->getContentSize());
+			vinyl_clipping->setStencil(mask);
+			vinyl_clipping->setID("custom-vinyl");
+			vinyl_clipping->setZOrder(1);
+			vinyl_clipping->setAlphaThreshold(0.5f);
+			this->addChild(vinyl_clipping);
+
+			auto vinyl_middle = CCSprite::create("vinyl_middle.png"_spr);
+			vinyl_middle->setPosition(vinyl_center);
+			vinyl_middle->setScale(0.125f);
+			vinyl_middle->setZOrder(2);
+			this->addChild(vinyl_middle);
+
+			auto vinyl_outline = CCSprite::create("vinyl_outline.png"_spr);
+			vinyl_outline->setPosition(vinyl_center);
+			vinyl_outline->setScale(0.125f);
+			vinyl_outline->setZOrder(2);
+			this->addChild(vinyl_outline);
+
 			this->schedule(schedule_selector(MusicPlayer::update_menu));
 
 			this->updateLayout();
+
+			refresh_cover_image(-1);
 
 			return true;
 		}
@@ -306,12 +347,55 @@ class MusicPlayer : public CCMenu {
 			CCDirector::get()->pushScene(CCTransitionFade::create(0.5f, scene));
 		}
 
+		void refresh_cover_image(int music_id)
+		{
+			if (music_id < 0)
+			{
+				auto engine = FMODAudioEngine::sharedEngine();
+				auto custom_engine = static_cast<MyAudioEngine *>(engine);
+
+				music_id = custom_engine->m_fields->songs[custom_engine->m_fields->current_music];
+			}
+
+			auto vinyl_clipping = this->getChildByID("custom-vinyl");
+			vinyl_clipping->removeAllChildren();
+
+			auto vinyl_image = LazySprite::create({32, 32}, false);
+			vinyl_image->setAutoResize(true);
+			vinyl_image->setPosition({0, 0});
+			auto url = get_link_from_music_id(music_id, "png");
+			vinyl_image->loadFromUrl(url);
+			vinyl_image->setLoadCallback([vinyl_image, music_id](Result<> res) {
+			if (res) {
+				geode::log::info("Cover loaded successfully! PNG is fine.");
+				vinyl_image->setVisible(true);
+			} else {
+				geode::log::info("Png not found for cover. Trying Webp. Otherwise, we can't do much more.");
+				
+				
+				vinyl_image->setLoadCallback([vinyl_image, music_id](Result<> res) {
+				if (res) {
+					geode::log::info("Cover loaded successfully! Webp was definitely the solution!");
+					vinyl_image->setVisible(true);
+				} else {
+					geode::log::info("Webp not found. Sad...");
+					vinyl_image->setVisible(false);
+				}
+				});
+
+				auto url = get_link_from_music_id(music_id, "webp");
+				vinyl_image->loadFromUrl(url);
+				vinyl_image->setVisible(false);
+			}
+			});
+			vinyl_clipping->addChild(vinyl_image);
+		}
+
 	public:
 		bool ccTouchBegan(CCTouch* touch, CCEvent* event)
 		{
 			if (this->mouse_touches_progress_bar())
 			{
-				geode::log::debug("yes");
 				this->is_mouse_down = true;
 				return true;
 			}
@@ -332,10 +416,16 @@ class MusicPlayer : public CCMenu {
 		{
 			auto engine = FMODAudioEngine::sharedEngine();
 			auto custom_engine = static_cast<MyAudioEngine *>(engine);
-			if (custom_engine->m_fields->current_music != this->old_music_index)
+
+			auto vinyl_sprite = this->getChildByID("vinyl");
+			auto custom_vinyl_sprite = static_cast<LazySprite *>(this->getChildByID("custom-vinyl")->getChildByIndex(0));
+			auto vinyl_head_sprite = this->getChildByID("vinyl-head");
+			int music_id = custom_engine->m_fields->songs[custom_engine->m_fields->current_music];
+
+
+			if (music_id != this->old_music_id)
 			{
-				int music_id = custom_engine->m_fields->songs[custom_engine->m_fields->current_music];
-				old_music_index = music_id;
+				this->old_music_id = music_id;
 
 				auto music_manager = MusicDownloadManager::sharedState();
 				auto music_name = music_manager->getSongInfoObject(music_id)->m_songName;
@@ -366,15 +456,28 @@ class MusicPlayer : public CCMenu {
 
 				artist_name_sprite->setCString(artist_name.c_str());
 				artist_name_sprite->updateLabel();
-			}
 
-			auto vinyl_sprite = this->getChildByID("vinyl");
-			auto vinyl_head_sprite = this->getChildByID("vinyl-head");
+				//custom_vinyl_sprite->cancelLoad();
+				//custom_vinyl_sprite->initWithSpriteFrameName("vinyl.png"_spr);
+
+				if (music_id < 10000000) {
+					refresh_cover_image(music_id);
+					custom_vinyl_sprite = static_cast<LazySprite *>(this->getChildByID("custom-vinyl")->getChildByIndex(0));
+				} else if (custom_vinyl_sprite) {
+					custom_vinyl_sprite->setVisible(false);
+				}
+			}
 
 			vinyl_sprite->setRotation(vinyl_sprite->getRotation() + dt * 100.0f);
 			if (vinyl_sprite->getRotation() > 360.0f)
 				vinyl_sprite->setRotation(0.0f);
 			
+			if (custom_vinyl_sprite){
+				custom_vinyl_sprite->setRotation(custom_vinyl_sprite->getRotation() + dt * 100.0f);
+				if (custom_vinyl_sprite->getRotation() > 360.0f)
+					custom_vinyl_sprite->setRotation(0.0f);
+			}
+
 			FMOD::Channel *channel = nullptr;
 			auto result = engine->m_backgroundMusicChannel->getChannel(0, &channel);
 

@@ -23,7 +23,10 @@
 			"resources/vinyl.png",
 			"resources/progress_edge.png",
 			"resources/vinyl_head.png",
-			"resources/progress_bar.png"
+			"resources/progress_bar.png",
+			"resources/vinyl_mask.png",
+			"resources/vinyl_middle.png",
+			"resources/vinyl_outline.png"
 		],
 		"fonts": {
 			"MusicPlayerFont": {
