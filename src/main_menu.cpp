@@ -140,7 +140,8 @@ void MyMenuLayer::update_beats(float dt) {
         float amplitude = this->m_fields->beats_amplitude[ampl_index];
         this->m_fields->beats_amplitude[ampl_index] -= dt * BEATS_DECAY_FACTOR * ((1.0f - amplitude) * 0.8f + 0.2f);
         if (this->m_fields->beats_amplitude[ampl_index] < 0.0)
-            this->m_fields->beats_amplitude[ampl_index] = 0.0; 
+            this->m_fields->beats_amplitude[ampl_index] = 0.0;
+        // All the objects in beats_menu are the same so we have to acess them using index
         auto beat = beats_menu->getChildByIndex(i);
         beat->setScaleX(amplitude * BEATS_LENGHT);
         beat->updateLayout();

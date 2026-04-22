@@ -1,21 +1,33 @@
 #include "includes/music_fixes.h"
 
-void MyCreatorLayer::onBack(CCObject* sender) {
-    unsigned int backgroundMusicPosition;
+void MyCCDirector::willSwitchToScene(cocos2d::CCScene* scene) {
+    CCDirector* director = CCDirector::get();
+    CCScene* previousScene = director->getRunningScene();
 
-    FMOD::Channel *channel = nullptr;
-    auto fmod = FMODAudioEngine::sharedEngine();
-    auto result = fmod->m_backgroundMusicChannel->getChannel(0, &channel);
-    if (result == FMOD_OK && channel) {
-        channel->getPosition(&backgroundMusicPosition, FMOD_TIMEUNIT_PCM);
-    }
-    
-    CreatorLayer::onBack(sender);
+    director->willSwitchToScene(scene);
+}
 
-    fmod->playMusic(current_music_path, false, 0.0f, 0);
-    result = fmod->m_backgroundMusicChannel->getChannel(0, &channel);
-    if (result == FMOD_OK && channel) {
-        geode::log::debug("pos: {}", backgroundMusicPosition);
-        channel->setPosition(backgroundMusicPosition, FMOD_TIMEUNIT_PCM);
-    }
+bool MyCCDirector::pushScene(cocos2d::CCScene* scene) {
+    CCDirector* director = CCDirector::get();
+    CCScene* previousScene = director->getRunningScene();
+
+    bool result = director->pushScene(scene);
+
+    return result;
+}
+
+bool MyCCDirector::replaceScene(cocos2d::CCScene* scene) {
+    CCDirector* director = CCDirector::get();
+    CCScene* previousScene = director->getRunningScene();
+
+    bool result = director->replaceScene(scene);
+
+    return result;
+}
+
+void MyCCDirector::popSceneWithTransition(float p0, cocos2d::PopTransition p1) {
+    CCDirector* director = CCDirector::get();
+    CCScene* previousScene = director->getRunningScene();
+
+    director->popSceneWithTransition(p0, p1);
 }

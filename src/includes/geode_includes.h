@@ -34,6 +34,5 @@
 #include <string>
 #include <Geode/modify/AppDelegate.hpp>
 #include <Geode/modify/FMODAudioEngine.hpp>
-#include <Geode/modify/CreatorLayer.hpp>
 
 using namespace geode::prelude;
