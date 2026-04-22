@@ -2,8 +2,7 @@
 
 std::string get_link_from_music_id(int music_id, std::string format)
 {
-	// @geode-ignore(unknown-resource)
-	return "https://aicon.ngfiles.com/" + std::to_string(music_id / 1000) + "/" + std::to_string(music_id) + "." + format;
+	return fmt::format("https://aicon.ngfiles.com/{}/{}.{}", std::to_string(music_id / 1000), std::to_string(music_id), format);
 }
 
 // Taken from https://stackoverflow.com/questions/154536/encode-decode-urls-in-c

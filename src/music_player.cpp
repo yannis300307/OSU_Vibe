@@ -378,10 +378,10 @@ void MusicPlayer::open_current_song_url(CCObject* sender)
     int music_id = custom_engine->m_fields->songs[custom_engine->m_fields->current_music];
     auto music_manager = MusicDownloadManager::sharedState();
     auto music = static_cast<SongInfoObject *>(music_manager->m_songObjects->objectForKey(std::to_string(music_id)));
-    auto ngArtistUrl = "https://" + music->m_artistName + ".newgrounds.com";
+    auto ngArtistUrl = fmt::format("https://{}.newgrounds.com", music->m_artistName);
     if (music_id > 10000000) {
         if (!music->m_youtubeChannel.empty())
-            web::openLinkInBrowser("https://www.youtube.com/channel/" + music->m_youtubeChannel);
+            web::openLinkInBrowser(fmt::format("https://www.youtube.com/channel/{}", music->m_youtubeChannel));
         else
         {
 
@@ -391,12 +391,12 @@ void MusicPlayer::open_current_song_url(CCObject* sender)
             "No", "Yes",
             [music](auto, bool btn2) {
                 if (btn2) {
-                    web::openLinkInBrowser("https://www.youtube.com/results?search_query=" + url_encode(music->m_songName + " - " + music->m_artistName));
+                    web::openLinkInBrowser(fmt::format("https://www.youtube.com/results?search_query={}", url_encode(fmt::format("{} - {}", music->m_songName, music->m_artistName))));
                 }
             }
         );
         };
     } else {
-        web::openLinkInBrowser("https://www.newgrounds.com/audio/listen/" + std::to_string(music_id));
+        web::openLinkInBrowser(fmt::format("https://www.newgrounds.com/audio/listen/", music_id));
     }
 }
